@@ -8,6 +8,7 @@
                 :data="item"
                 :tmp-item="tmpItem"
                 @click.native.stop="handleClickItem(item)"
+                @dblclick.native.stop="handleDoubleClickItem(item)"
                 @mouseenter.native.stop="handleHoverItem(item)"></Casitem>
         </ul><Caspanel v-if="sublist && sublist.length" :prefix-cls="prefixCls" :data="sublist" :disabled="disabled" :trigger="trigger" :change-on-select="changeOnSelect"></Caspanel>
     </span>
@@ -51,6 +52,21 @@
             handleClickItem (item) {
                 if (this.trigger !== 'click' && item.children && item.children.length) return;  // #1922
                 this.handleTriggerItem(item, false, true);
+            },
+            handleDoubleClickItem (item) {
+                if (this.trigger !== 'click' && item.children && item.children.length) return;  // #1922
+                // return value back recursion  // 向上递归，设置临时选中值（并非真实选中）
+                const backItem = this.getBaseItem(item);
+                if (backItem.label !== this.tmpItem.label || backItem.value !== this.tmpItem.value) {
+                    this.tmpItem = backItem;
+                    this.emitUpdate([backItem]);
+                }
+                this.sublist = [];
+                this.dispatch('Cascader', 'on-result-change', {
+                    lastValue: true,
+                    changeOnSelect: this.changeOnSelect,
+                    fromInit: false
+                });
             },
             handleHoverItem (item) {
                 if (this.trigger !== 'hover' || !item.children || !item.children.length) return;  // #1922
