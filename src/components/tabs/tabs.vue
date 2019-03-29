@@ -96,6 +96,10 @@
                 default: false
             },
             beforeRemove: Function,
+            // Tabs 嵌套时，用 name 区分层级
+            name: {
+                type: String
+            },
         },
         data () {
             return {
@@ -170,7 +174,26 @@
         methods: {
             getTabs () {
                 // return this.$children.filter(item => item.$options.name === 'TabPane');
-                return findComponentsDownward(this, 'TabPane');
+                const AllTabPanes = findComponentsDownward(this, 'TabPane');
+                const TabPanes = [];
+
+                AllTabPanes.forEach(item => {
+                    if (item.tab && this.name) {
+                        if (item.tab === this.name) {
+                            TabPanes.push(item);
+                        }
+                    } else {
+                        TabPanes.push(item);
+                    }
+                });
+
+                // 在 TabPane 使用 v-if 时，并不会按照预先的顺序渲染，这时可设置 index，并从小到大排序
+                TabPanes.sort((a, b) => {
+                    if (a.index && b.index) {
+                        return a.index > b.index ? 1 : -1;
+                    }
+                });
+                return TabPanes;
             },
             updateNav () {
                 this.navList = [];
