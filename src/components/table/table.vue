@@ -91,7 +91,7 @@
             <div :class="[prefixCls + '-fixed-right-header']" :style="fixedRightHeaderStyle" v-if="isRightFixed"></div>
             <div :class="[prefixCls + '-footer']" v-if="showSlotFooter" ref="footer"><slot name="footer"></slot></div>
         </div>
-        <Spin fix size="large" v-if="loading">
+        <Spin fix size="large" v-if="showLoading">
             <slot name="loading"></slot>
         </Spin>
     </div>
@@ -107,6 +107,7 @@
     import Locale from '../../mixins/locale';
     import elementResizeDetectorMaker from 'element-resize-detector';
     import { getAllColumns, convertToRows, convertColumnOrder, getRandomStr } from './util';
+import { setTimeout } from 'timers';
 
     const prefixCls = 'ivu-table';
 
@@ -187,6 +188,11 @@
                 type: Boolean,
                 default: false
             },
+            // 为统一loading体验感，设置延时
+            minTimeout:{
+                type: [Number,Boolean],
+                default: 1500
+            },
             draggable: {
                 type: Boolean,
                 default: false
@@ -223,6 +229,11 @@
                 showHorizontalScrollBar:false,
                 headerWidth:0,
                 headerHeight:0,
+                loadingTime:{
+                    start:0,
+                    end:0
+                },
+                showLoading:false
             };
         },
         computed: {
@@ -991,6 +1002,26 @@
             },
             showVerticalScrollBar () {
                 this.handleResize();
+            },
+            loading(val){
+                if(this.minTimeout===false){
+                    this.showLoading = val
+                    return
+                }
+                if(val){
+                    this.loadingTime.start = new Date().getTime()
+                    this.showLoading = true
+                }else{
+                    this.loadingTime.end = new Date().getTime()
+                    let passTime = this.loadingTime.end - this.loadingTime.start
+                    if( passTime > this.minTimeout){
+                        this.showLoading = false
+                    }else{
+                        setTimeout(()=>{
+                            this.showLoading = false
+                        },this.minTimeout - passTime)
+                    }
+                }
             }
         }
     };
