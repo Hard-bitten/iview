@@ -16,6 +16,7 @@
                 v-show="!((!!localeNoDataText && (!data || data.length === 0)) || (!!localeNoFilteredDataText && (!rebuildData || rebuildData.length === 0)))">
                 <table-body
                     ref="tbody"
+                    :draggable="draggable"
                     :prefix-cls="prefixCls"
                     :styleObject="tableStyle"
                     :columns="cloneColumns"
@@ -53,6 +54,7 @@
                 <div :class="[prefixCls + '-fixed-body']" :style="fixedBodyStyle" ref="fixedBody" @mousewheel="handleFixedMousewheel" @DOMMouseScroll="handleFixedMousewheel">
                     <table-body
                         fixed="left"
+                        :draggable="draggable"
                         :prefix-cls="prefixCls"
                         :styleObject="fixedTableStyle"
                         :columns="leftFixedColumns"
@@ -77,6 +79,7 @@
                 <div :class="[prefixCls + '-fixed-body']" :style="fixedBodyStyle" ref="fixedRightBody" @mousewheel="handleFixedMousewheel" @DOMMouseScroll="handleFixedMousewheel">
                     <table-body
                         fixed="right"
+                        :draggable="draggable"
                         :prefix-cls="prefixCls"
                         :styleObject="fixedRightTableStyle"
                         :columns="rightFixedColumns"
@@ -88,7 +91,7 @@
             <div :class="[prefixCls + '-fixed-right-header']" :style="fixedRightHeaderStyle" v-if="isRightFixed"></div>
             <div :class="[prefixCls + '-footer']" v-if="showSlotFooter" ref="footer"><slot name="footer"></slot></div>
         </div>
-        <Spin fix size="large" v-if="loading">
+        <Spin fix size="large" v-if="showLoading">
             <slot name="loading"></slot>
         </Spin>
     </div>
@@ -104,6 +107,7 @@
     import Locale from '../../mixins/locale';
     import elementResizeDetectorMaker from 'element-resize-detector';
     import { getAllColumns, convertToRows, convertColumnOrder, getRandomStr } from './util';
+import { setTimeout } from 'timers';
 
     const prefixCls = 'ivu-table';
 
@@ -114,6 +118,11 @@
         name: 'Table',
         mixins: [ Locale ],
         components: { tableHead, tableBody, Spin },
+        provide () {
+            return {
+                tableRoot: this
+            };
+        },
         props: {
             data: {
                 type: Array,
@@ -178,6 +187,21 @@
             loading: {
                 type: Boolean,
                 default: false
+            },
+            // 为统一loading体验感，设置延时
+            minTimeout:{
+                type: [Number,Boolean],
+                default: 1500
+            },
+            draggable: {
+                type: Boolean,
+                default: false
+            },
+            tooltipTheme: {
+                validator (value) {
+                    return oneOf(value, ['dark', 'light']);
+                },
+                default: 'dark'
             }
         },
         data () {
@@ -205,6 +229,11 @@
                 showHorizontalScrollBar:false,
                 headerWidth:0,
                 headerHeight:0,
+                loadingTime:{
+                    start:0,
+                    end:0
+                },
+                showLoading:false
             };
         },
         computed: {
@@ -828,7 +857,7 @@
             // 修改列，设置一个隐藏的 id，便于后面的多级表头寻找对应的列，否则找不到
             makeColumnsId (columns) {
                 return columns.map(item => {
-                    if ('children' in item) item.children = this.makeColumnsId(item.children);
+                    if ('children' in item) this.makeColumnsId(item.children);
                     item.__id = getRandomStr(6);
                     return item;
                 });
@@ -843,6 +872,7 @@
                 columns.forEach((column, index) => {
                     column._index = index;
                     column._columnKey = columnKey++;
+                    column.width = parseInt(column.width);
                     column._width = column.width ? column.width : '';    // update in handleResize()
                     column._sortType = 'normal';
                     column._filterVisible = false;
@@ -903,6 +933,9 @@
                 const data = Csv(columns, datas, params, noHeader);
                 if (params.callback) params.callback(data);
                 else ExportCsv.download(params.filename, data);
+            },
+            dragAndDrop(a,b) {
+                this.$emit('on-drag-drop', a,b);
             }
         },
         created () {
@@ -969,6 +1002,26 @@
             },
             showVerticalScrollBar () {
                 this.handleResize();
+            },
+            loading(val){
+                if(this.minTimeout===false){
+                    this.showLoading = val
+                    return
+                }
+                if(val){
+                    this.loadingTime.start = new Date().getTime()
+                    this.showLoading = true
+                }else{
+                    this.loadingTime.end = new Date().getTime()
+                    let passTime = this.loadingTime.end - this.loadingTime.start
+                    if( passTime > this.minTimeout){
+                        this.showLoading = false
+                    }else{
+                        setTimeout(()=>{
+                            this.showLoading = false
+                        },this.minTimeout - passTime)
+                    }
+                }
             }
         }
     };

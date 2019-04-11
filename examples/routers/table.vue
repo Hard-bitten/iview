@@ -1,7 +1,8 @@
 <template>
     <div>
-        <Table ref="currentRowTable" :columns="columns3" :data="data1"></Table>
+        <Table tooltip-theme="light" ref="currentRowTable" :columns="columns3" :data="data1" :draggable="true" @on-drag-drop="onDragDrop" :loading="loading"></Table>
         <Button @click="handleClearCurrentRow">Clear</Button>
+        <i-switch v-model="loading"/>
     </div>
 </template>
 <script>
@@ -56,12 +57,18 @@
                         address: 'Ottawa No. 2 Lake Park',
                         date: '2016-10-04'
                     }
-                ]
+                ],
+                loading:false
             }
         },
         methods: {
             handleClearCurrentRow () {
+                this.loading = !this.loading
                 this.$refs.currentRowTable.clearCurrentRow();
+            },
+            onDragDrop(a,b){
+                console.log(a,b);
+                this.data1.splice(b,1,...this.data1.splice(a, 1 , this.data1[b]));
             }
         }
     }
