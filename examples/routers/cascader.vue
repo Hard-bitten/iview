@@ -1,10 +1,11 @@
 <template>
-    <Cascader :data="data4" :load-data="loadData"></Cascader>
+    <Cascader :data="data4" :load-data="loadData" v-model="model"></Cascader>
 </template>
 <script>
     export default {
         data () {
             return {
+                model:['hangzhou'],
                 data4: [
                     {
                         value: 'beijing',
@@ -19,7 +20,7 @@
                         loading:false
                     }
                 ]
-            }
+            };
         },
         methods: {
             loadData (item, callback) {
@@ -57,5 +58,5 @@
                 }, 1000);
             }
         }
-    }
+    };
 </script>

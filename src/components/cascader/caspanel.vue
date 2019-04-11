@@ -57,10 +57,11 @@
                 if (this.trigger !== 'click' && item.children && item.children.length) return;  // #1922
                 // return value back recursion  // 向上递归，设置临时选中值（并非真实选中）
                 const backItem = this.getBaseItem(item);
-                if (backItem.label !== this.tmpItem.label || backItem.value !== this.tmpItem.value) {
-                    this.tmpItem = backItem;
-                    this.emitUpdate([backItem]);
-                }
+                // 在有选择子集的情况下，在双击选择父级，不需要判断与临时是否相同
+                // if (backItem.label !== this.tmpItem.label || backItem.value !== this.tmpItem.value) {
+                this.tmpItem = backItem;
+                this.emitUpdate([backItem]);
+                // }
                 this.sublist = [];
                 this.dispatch('Cascader', 'on-result-change', {
                     lastValue: true,

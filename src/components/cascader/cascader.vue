@@ -331,7 +331,8 @@
                 const changeOnSelect = params.changeOnSelect;
                 const fromInit = params.fromInit;
 
-                if (lastValue || changeOnSelect) {
+                // 添加初始化情况，不强制要求选择最终级别
+                if (lastValue || changeOnSelect || fromInit) {
                     const oldVal = JSON.stringify(this.currentValue);
                     this.selected = this.tmpSelected;
 
