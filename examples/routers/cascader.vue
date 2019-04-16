@@ -1,23 +1,62 @@
 <template>
-    <Cascader :data="data4" :load-data="loadData" v-model="model"></Cascader>
+    <!-- <Cascader :data="data4" :load-data="loadData" v-model="model"></Cascader> -->
+    <Row>
+        <i-col span="18">
+            <i-button v-on:click="setValue">setValue</i-button>
+        </i-col>
+        <i-col span="4">
+            <Cascader :data="data" v-model="value1" transfer></Cascader>
+        </i-col>
+    </Row>
 </template>
 <script>
     export default {
         data () {
             return {
-                model:['hangzhou'],
-                data4: [
+                value1:['hangzhou'],
+                data: [
                     {
                         value: 'beijing',
                         label: '北京',
-                        children: [],
+                        children: [
+                            {
+                                value: 'a873a9bd-7d75-4f46-9369-4d25a1feb13c',
+                                label: '故宫'
+                            },{
+                                value: 'tiantan',
+                                label: '天坛'
+                            }, {
+                                value: 'wangfujing',
+                                label: '王府井'
+                            }
+                        ],
                         loading: false
                     },
                     {
-                        value: 'hangzhou',
-                        label: '杭州',
-                        children: [],
-                        loading:false
+                        value: 'ca7c0fbc-728d-42e8-b111-f5f73cf9171b',
+                        label: '江苏',
+                        children: [{
+                            value: 'a89d891b-5c50-44c0-87b4-d4f934edc921',
+                            label: '南京',
+                            children: [{
+                                value: '44736384-0ede-41ba-bf7a-59c84241851a',
+                                label: '夫子庙中国第一庙来自南京',
+                                children:[{
+                                    value: '44736384-0ede-41ba-bf7a-59c84241851c',
+                                    label:'自定义产品系统来自黑龙江地区'
+                                }]
+                            }]
+                        }, {
+                            value: 'suzhou',
+                            label: '苏州',
+                            children: [{
+                                value: 'zhuozhengyuan',
+                                label: '拙政园',
+                            }, {
+                                value: 'shizilin',
+                                label: '狮子林',
+                            }]
+                        }],
                     }
                 ]
             };
@@ -31,7 +70,8 @@
                 var x3 = x[2].toString();
 
                 this.value1 = x;
-            }
+            },
+            
         },
         mounted () {
 
