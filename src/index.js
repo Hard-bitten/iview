@@ -58,6 +58,7 @@ import Upload from './components/upload';
 import {Row, Col} from './components/grid';
 import {Select, Option, OptionGroup} from './components/select';
 import locale from './locale/index';
+import TreeSelect from './components/tree-select';
 
 const components = {
     Affix,
@@ -135,7 +136,8 @@ const components = {
     Tooltip,
     Transfer,
     Tree,
-    Upload
+    Upload,
+    TreeSelect
 };
 
 const iview = {

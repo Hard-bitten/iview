@@ -69,6 +69,7 @@ nav {
                 <li><router-link to="/cell">Cell</router-link></li>
                 <li><router-link to="/drawer">Drawer</router-link></li>
                 <li><router-link to="/icon">Icon</router-link></li>
+                <li><router-link to="/tree-select">TreeSelect</router-link></li>
             </ul>
         </nav>
         <router-view></router-view>
@@ -79,7 +80,7 @@ nav {
         data: function() {
             return {
 
-            }
+            };
         },
         mounted: function() {
 
@@ -90,5 +91,5 @@ nav {
         methods: {
 
         }
-    }
+    };
 </script>
