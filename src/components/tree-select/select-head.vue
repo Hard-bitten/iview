@@ -221,7 +221,7 @@
             },
             removeTag (value) {
                 if (this.disabled) return false;
-                this.dispatch('iSelect', 'on-select-selected', value);
+                this.dispatch('iSelect', 'on-tag-remove', value);
             },
             resetInputState () {
                 this.inputLength = this.$refs.input.value.length * 12 + 20;

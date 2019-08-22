@@ -234,7 +234,7 @@
             }
         },
         mounted(){
-            // this.$on('on-select-selected', this.onOptionClick);
+            this.$on('on-tag-remove', this.onOptionRemove);
 
             let initialValue = this.getInitialValue();
             this.originData = this.resetTree(
@@ -570,6 +570,35 @@
                 }
 
                 this.focusIndex = index;
+            },
+            onOptionRemove(curNode){
+                this.values=this.values.filter(value=>value.value!=curNode.value);
+                let curKey = curNode.value;
+                this.$nextTick(()=>{
+                    this.originData = this.resetTree(
+                        (node,parentNode) => {
+                            if (node.children && node.children.length > 0) {
+                                delete node.checked;
+                                delete node.indeterminate;
+                            } 
+                            if (node.value === curKey) {
+                                node.checked = false;
+                                node.indeterminate = false;
+                            }
+                            if (parentNode && (parentNode.value===curKey || parentNode.should )){
+                                node.should = true;
+                                node.checked = false;
+                                node.indeterminate = false;
+                            }
+                        }
+                    );
+                    // clear temp 
+                    this.originData = this.resetTree(
+                        (node) => {
+                            delete node.should ;
+                        }
+                    );
+                });
             },
             onOptionClick(option) {
                 if (this.multiple){
