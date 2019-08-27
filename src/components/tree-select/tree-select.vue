@@ -129,7 +129,7 @@
     const ANIMATION_TIMEOUT = 300;
 
     export default {
-        name: 'iSelect',
+        name: 'treeSelect',
         mixins: [ Emitter, Locale ],
         components: {  Drop, SelectHead ,Tree},
         directives: { clickOutside, TransferDom },
@@ -830,40 +830,70 @@
             dropVisible(open){
                 this.broadcast('Drop', open ? 'on-update-popper' : 'on-destroy-popper');
             },
-            treeData(){
-                if (this.hasExpectedValue && this.treeData.length > 0){
-                    if (this.values.length === 0) {
-                        this.values = this.getInitialValue();
-                    }
-                    this.values = this.values.map(this.getOptionData).filter(Boolean);
-                    this.hasExpectedValue = false;
-                }
+            // treeData(){
+            //     if (this.hasExpectedValue && this.treeData.length > 0){
+            //         if (this.values.length === 0) {
+            //             this.values = this.getInitialValue();
+            //         }
+            //         this.values = this.values.map(this.getOptionData).filter(Boolean);
+            //         this.hasExpectedValue = false;
+            //     }
 
-                if (this.slotOptions && this.slotOptions.length === 0){
-                    this.query = '';
-                }
+            //     if (this.slotOptions && this.slotOptions.length === 0){
+            //         this.query = '';
+            //     }
 
-                 // 当 dropdown 一开始在控件下部显示，而滚动页面后变成在上部显示，如果选项列表的长度由内部动态变更了(搜索情况)
-                 // dropdown 的位置不会重新计算，需要重新计算
-                this.broadcast('Drop', 'on-update-popper');
-            },
+            //      // 当 dropdown 一开始在控件下部显示，而滚动页面后变成在上部显示，如果选项列表的长度由内部动态变更了(搜索情况)
+            //      // dropdown 的位置不会重新计算，需要重新计算
+            //     this.broadcast('Drop', 'on-update-popper');
+            // },
             visible(state){
                 this.$emit('on-open-change', state);
             },
-            slotOptions(options, old){
-                // #4626，当 Options 的 label 更新时，v-model 的值未更新
-                // remote 下，调用 getInitialValue 有 bug
-                if (!this.remote) {
-                    const values = this.getInitialValue();
-                    if (this.flatOptions && this.flatOptions.length && values.length && !this.multiple) {
-                        this.values = values.map(this.getOptionData).filter(Boolean);
-                    }
-                }
+            // slotOptions(options, old){
+            //     // #4626，当 Options 的 label 更新时，v-model 的值未更新
+            //     // remote 下，调用 getInitialValue 有 bug
+            //     if (!this.remote) {
+            //         const values = this.getInitialValue();
+            //         if (this.flatOptions && this.flatOptions.length && values.length && !this.multiple) {
+            //             this.values = values.map(this.getOptionData).filter(Boolean);
+            //         }
+            //     }
 
-                // 当 dropdown 在控件上部显示时，如果选项列表的长度由外部动态变更了，
-                // dropdown 的位置会有点问题，需要重新计算
-                if (options && old && options.length !== old.length) {
-                    this.broadcast('Drop', 'on-update-popper');
+            //     // 当 dropdown 在控件上部显示时，如果选项列表的长度由外部动态变更了，
+            //     // dropdown 的位置会有点问题，需要重新计算
+            //     if (options && old && options.length !== old.length) {
+            //         this.broadcast('Drop', 'on-update-popper');
+            //     }
+            // },
+            treeData(treeData,old){
+                if (!this.remote) {
+                    const initialValue = this.getInitialValue();
+                    this.originData = this.resetTree(
+                        (node, parentNode) => {
+                            if (parentNode && parentNode.value) {
+                                node.value = `${parentNode.value}/${node.value}`;
+                            } else {
+                                node.value = node.value;
+                            }
+                            node.title = node.label;
+                            if (!node.children && initialValue.includes(node.value)) {
+                                node.checked = true;
+                            }
+                        }
+                    );
+
+                    // set the initial values if there are any
+                    if (!this.remote && this.treeData.length > 0){
+                        this.values = this.getInitialValue().map(value => {
+                            if (typeof value !== 'number' && !value) return null;
+                            return this.getOptionData(value);
+                        }).filter(Boolean);
+                    }
+
+                    if (treeData && old && treeData.length !== old.length) {
+                        this.broadcast('Drop', 'on-update-popper');
+                    }
                 }
             }
         }

@@ -3,14 +3,14 @@
 </template>
 
 <script>
+import { setInterval, setTimeout } from 'timers';
 // import TreeSelect from 'vue-super-tree-select';
 
 export default {
     // components: {TreeSelect},
-    data () {
-        return {
-            model_: ['早餐/南方/肠粉','早餐/北方/油条'],
-            data_: [
+    mounted(){
+        setTimeout(()=>{
+            this.data_ = [
                 {
                     value:'早餐',label:'早餐',
                     children: [
@@ -49,7 +49,15 @@ export default {
                         }
                     ]
                 }
-            ]
+            ];
+            this.model_=['早餐/南方/肠粉','早餐/北方/油条'];
+
+        },2000);
+    },
+    data () {
+        return {
+            model_: [],
+            data_: []
         };
     }
 };
