@@ -95,10 +95,10 @@
                         zip: 100000
                     }
                 ]
-            }
+            };
         },
         mounted () {
-            console.log(1)
+            console.log(1);
         }
-    }
+    };
 </script>

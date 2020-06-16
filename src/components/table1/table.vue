@@ -25,15 +25,6 @@
                     :columns-width="columnsWidth"
                     :obj-data="objData"></table-body>
             </div>
-            <table-summary
-                v-if="showSummary && (data && data.length)"
-                ref="summary"
-                :prefix-cls="prefixCls"
-                :styleObject="tableStyle"
-                :columns="cloneColumns"
-                :data="summaryData"
-                :columns-width="columnsWidth"
-            />
             <div
                 :class="[prefixCls + '-tip']" :style="bodyStyle" @scroll="handleBodyScroll"
                 v-show="((!!localeNoDataText && (!data || data.length === 0)) || (!!localeNoFilteredDataText && (!rebuildData || rebuildData.length === 0)))">
@@ -73,16 +64,6 @@
                         :columns-width="columnsWidth"
                         :obj-data="objData"></table-body>
                 </div>
-                <table-summary
-                    v-if="showSummary && (data && data.length)"
-                    fixed="left"
-                    :prefix-cls="prefixCls"
-                    :styleObject="fixedTableStyle"
-                    :columns="leftFixedColumns"
-                    :data="summaryData"
-                    :columns-width="columnsWidth"
-                    :style="{ 'margin-top': showHorizontalScrollBar ? scrollBarWidth + 'px' : 0 }"
-                />
             </div>
             <div :class="[prefixCls + '-fixed-right']" :style="fixedRightTableStyle" v-if="isRightFixed">
                 <div :class="fixedHeaderClasses" v-if="showHeader">
@@ -109,22 +90,11 @@
                         :columns-width="columnsWidth"
                         :obj-data="objData"></table-body>
                 </div>
-                <table-summary
-                    v-if="showSummary && (data && data.length)"
-                    fixed="right"
-                    :prefix-cls="prefixCls"
-                    :styleObject="fixedRightTableStyle"
-                    :columns="rightFixedColumns"
-                    :data="summaryData"
-                    :columns-width="columnsWidth"
-                    :style="{ 'margin-top': showHorizontalScrollBar ? scrollBarWidth + 'px' : 0 }"
-                />
             </div>
             <div :class="[prefixCls + '-fixed-right-header']" :style="fixedRightHeaderStyle" v-if="isRightFixed"></div>
             <div :class="[prefixCls + '-footer']" v-if="showSlotFooter" ref="footer"><slot name="footer"></slot></div>
         </div>
-        <div class="ivu-table-resize-line" v-show="showResizeLine" ref="resizeLine"></div>
-        <Spin fix size="large" v-if="loading">
+        <Spin fix size="large" v-if="showLoading">
             <slot name="loading"></slot>
         </Spin>
     </div>
@@ -132,7 +102,6 @@
 <script>
     import tableHead from './table-head.vue';
     import tableBody from './table-body.vue';
-    import tableSummary from './summary.vue';
     import Spin from '../spin/spin.vue';
     import { oneOf, getStyle, deepCopy, getScrollBarSize } from '../../utils/assist';
     import { on, off } from '../../utils/dom';
@@ -141,6 +110,7 @@
     import Locale from '../../mixins/locale';
     import elementResizeDetectorMaker from 'element-resize-detector';
     import { getAllColumns, convertToRows, convertColumnOrder, getRandomStr } from './util';
+import { setTimeout } from 'timers';
 
     const prefixCls = 'ivu-table';
 
@@ -150,7 +120,7 @@
     export default {
         name: 'Table',
         mixins: [ Locale ],
-        components: { tableHead, tableBody, tableSummary, Spin },
+        components: { tableHead, tableBody, Spin },
         provide () {
             return {
                 tableRoot: this
@@ -225,6 +195,11 @@
                 type: Boolean,
                 default: false
             },
+            // 为统一loading体验感，设置延时
+            minTimeout:{
+                type: [Number,Boolean],
+                default: 1500
+            },
             draggable: {
                 type: Boolean,
                 default: false
@@ -236,39 +211,7 @@
                 default: 'dark'
             },
             // #5380 开启后，:key 强制更新，否则使用 index
-            // 4.1 开始支持 String，指定具体字段
             rowKey: {
-                type: [Boolean, String],
-                default: false
-            },
-            // 4.0.0
-            spanMethod: {
-                type: Function
-            },
-            // 4.0.0
-            showSummary: {
-                type: Boolean,
-                default: false
-            },
-            // 4.0.0
-            summaryMethod: {
-                type: Function
-            },
-            // 4.0.0
-            sumText: {
-                type: String
-            },
-            // 4.1.0
-            indentSize: {
-                type: Number,
-                default: 16
-            },
-            // 4.1.0
-            loadData: {
-                type: Function
-            },
-            // 4.1.0
-            contextMenu: {
                 type: Boolean,
                 default: false
             }
@@ -298,7 +241,11 @@
                 showHorizontalScrollBar:false,
                 headerWidth:0,
                 headerHeight:0,
-                showResizeLine: false
+                loadingTime:{
+                    start:0,
+                    end:0
+                },
+                showLoading:false
             };
         },
         computed: {
@@ -316,22 +263,13 @@
                     return this.noFilteredDataText;
                 }
             },
-            localeSumText () {
-                if (this.sumText === undefined) {
-                    return this.t('i.table.sumText');
-                } else {
-                    return this.sumText;
-                }
-            },
             wrapClasses () {
                 return [
                     `${prefixCls}-wrapper`,
                     {
                         [`${prefixCls}-hide`]: !this.ready,
                         [`${prefixCls}-with-header`]: this.showSlotHeader,
-                        [`${prefixCls}-with-footer`]: this.showSlotFooter,
-                        [`${prefixCls}-with-summary`]: this.showSummary,
-                        [`${prefixCls}-wrapper-with-border`]: this.border
+                        [`${prefixCls}-with-footer`]: this.showSlotFooter
                     }
                 ];
             },
@@ -356,18 +294,12 @@
             },
             styles () {
                 let style = {};
-                let summaryHeight = 0;
-                if (this.showSummary) {
-                    if (this.size === 'small') summaryHeight = 40;
-                    else if (this.size === 'large') summaryHeight = 60;
-                    else summaryHeight = 48;
-                }
                 if (this.height) {
-                    let height = parseInt(this.height) + summaryHeight;
+                    const height = parseInt(this.height);
                     style.height = `${height}px`;
                 }
                 if (this.maxHeight) {
-                    const maxHeight = parseInt(this.maxHeight) + summaryHeight;
+                    const maxHeight = parseInt(this.maxHeight);
                     style.maxHeight = `${maxHeight}px`;
                 }
                 if (this.width) style.width = `${this.width}px`;
@@ -458,58 +390,6 @@
             },
             isRightFixed () {
                 return this.columns.some(col => col.fixed && col.fixed === 'right');
-            },
-            // for summary data
-            summaryData () {
-                if (!this.showSummary) return {};
-
-                let sums = {};
-                if (this.summaryMethod) {
-                    sums = this.summaryMethod({ columns: this.cloneColumns, data: this.rebuildData });
-                } else {
-                    this.cloneColumns.forEach((column, index) => {
-                        const key = column.key;
-                        if (index === 0) {
-                            sums[key] = {
-                                key: column.key,
-                                value: this.localeSumText
-                            };
-                            return;
-                        }
-                        const values = this.rebuildData.map(item => Number(item[column.key]));
-                        const precisions = [];
-                        let notNumber = true;
-                        values.forEach(value => {
-                            if (!isNaN(value)) {
-                                notNumber = false;
-                                let decimal = ('' + value).split('.')[1];
-                                precisions.push(decimal ? decimal.length : 0);
-                            }
-                        });
-                        const precision = Math.max.apply(null, precisions);
-                        if (!notNumber) {
-                            const currentValue = values.reduce((prev, curr) => {
-                                const value = Number(curr);
-                                if (!isNaN(value)) {
-                                    return parseFloat((prev + curr).toFixed(Math.min(precision, 20)));
-                                } else {
-                                    return prev;
-                                }
-                            }, 0);
-                            sums[key] = {
-                                key: column.key,
-                                value: currentValue
-                            };
-                        } else {
-                            sums[key] = {
-                                key: column.key,
-                                value: ''
-                            };
-                        }
-                    });
-                }
-
-                return sums;
             }
         },
         methods: {
@@ -553,7 +433,7 @@
                     columnWidth = parseInt(usableWidth / usableLength);
                 }
 
-
+                    
                 for (let i = 0; i < this.cloneColumns.length; i++) {
                     const column = this.cloneColumns[i];
                     let width = columnWidth + (column.minWidth?column.minWidth:0);
@@ -571,7 +451,7 @@
                             else if (column.maxWidth < width){
                                 width = column.maxWidth;
                             }
-
+                            
                             if (usableWidth>0) {
                                 usableWidth -= width - (column.minWidth?column.minWidth:0);
                                 usableLength--;
@@ -618,167 +498,72 @@
 
                     }
                 }
-
+                
                 this.tableWidth = this.cloneColumns.map(cell => cell._width).reduce((a, b) => a + b, 0) + (this.showVerticalScrollBar?this.scrollBarWidth:0) + 1;
                 this.columnsWidth = columnsWidth;
                 this.fixedHeader();
             },
-            handleMouseIn (_index, rowKey) {
+            handleMouseIn (_index) {
                 if (this.disabledHover) return;
-                const objData = rowKey ? this.getDataByRowKey(rowKey) : this.objData[_index];
-                if (objData._isHover) return;
-                objData._isHover = true;
+                if (this.objData[_index]._isHover) return;
+                this.objData[_index]._isHover = true;
             },
-            handleMouseOut (_index, rowKey) {
+            handleMouseOut (_index) {
                 if (this.disabledHover) return;
-                const objData = rowKey ? this.getDataByRowKey(rowKey) : this.objData[_index];
-                objData._isHover = false;
+                this.objData[_index]._isHover = false;
             },
             // 通用处理 highlightCurrentRow 和 clearCurrentRow
-            handleCurrentRow (type, _index, rowKey) {
-                const objData = rowKey ? this.getDataByRowKey(rowKey) : this.objData[_index];
-
-                let oldData = null;
+            handleCurrentRow (type, _index) {
                 let oldIndex = -1;
-
                 for (let i in this.objData) {
                     if (this.objData[i]._isHighlight) {
                         oldIndex = parseInt(i);
                         this.objData[i]._isHighlight = false;
-                        break;
-                    } else if (this.objData[i].children && this.objData[i].children.length) {
-                        const resetData = this.handleResetChildrenRow(this.objData[i]);
-                        if (resetData) oldData = JSON.parse(JSON.stringify(resetData));
                     }
                 }
-                if (type === 'highlight') objData._isHighlight = true;
-                if (oldIndex >= 0) {
-                    oldData = JSON.parse(JSON.stringify(this.cloneData[oldIndex]));
-                }
-                const newData = type === 'highlight' ? rowKey ? JSON.parse(JSON.stringify(this.getBaseDataByRowKey(rowKey))) : JSON.parse(JSON.stringify(this.cloneData[_index])) : null;
+                if (type === 'highlight') this.objData[_index]._isHighlight = true;
+                const oldData = oldIndex < 0 ? null : JSON.parse(JSON.stringify(this.cloneData[oldIndex]));
+                const newData = type === 'highlight' ? JSON.parse(JSON.stringify(this.cloneData[_index])) : null;
                 this.$emit('on-current-change', newData, oldData);
             },
-            handleResetChildrenRow (objData) {
-                let data = null;
-                if (objData.children && objData.children.length) {
-                    for (let i = 0; i < objData.children.length; i++) {
-                        const item = objData.children[i];
-                        if (item._isHighlight) {
-                            item._isHighlight = false;
-                            data = item;
-                            break;
-                        } else if (item.children && item.children.length) {
-                            data = this.handleResetChildrenRow(item);
-                        }
-                    }
-                }
-                return data;
-            },
-            highlightCurrentRow (_index, rowKey) {
-                const objData = rowKey ? this.getDataByRowKey(rowKey) : this.objData[_index];
-                if (!this.highlightRow || objData._isHighlight) return;
-                this.handleCurrentRow('highlight', _index, rowKey);
+            highlightCurrentRow (_index) {
+                if (!this.highlightRow || this.objData[_index]._isHighlight) return;
+                this.handleCurrentRow('highlight', _index);
             },
             clearCurrentRow () {
                 if (!this.highlightRow) return;
                 this.handleCurrentRow('clear');
             },
-            clickCurrentRow (_index, rowKey) {
-                this.highlightCurrentRow (_index, rowKey);
-                if (rowKey) {
-                    this.$emit('on-row-click', JSON.parse(JSON.stringify(this.getBaseDataByRowKey(rowKey))));
-                } else {
-                    this.$emit('on-row-click', JSON.parse(JSON.stringify(this.cloneData[_index])), _index);
-                }
+            clickCurrentRow (_index) {
+                this.highlightCurrentRow (_index);
+                this.$emit('on-row-click', JSON.parse(JSON.stringify(this.cloneData[_index])), _index);
             },
-            dblclickCurrentRow (_index, rowKey) {
-                this.highlightCurrentRow (_index, rowKey);
-                if (rowKey) {
-                    this.$emit('on-row-dblclick', JSON.parse(JSON.stringify(this.getBaseDataByRowKey(rowKey))));
-                } else {
-                    this.$emit('on-row-dblclick', JSON.parse(JSON.stringify(this.cloneData[_index])), _index);
-                }
-            },
-            contextmenuCurrentRow (_index, rowKey, event) {
-                if (rowKey) {
-                    this.$emit('on-contextmenu', JSON.parse(JSON.stringify(this.getBaseDataByRowKey(rowKey))), event);
-                } else {
-                    this.$emit('on-contextmenu', JSON.parse(JSON.stringify(this.cloneData[_index])), event);
-                }
+            dblclickCurrentRow (_index) {
+                this.highlightCurrentRow (_index);
+                this.$emit('on-row-dblclick', JSON.parse(JSON.stringify(this.cloneData[_index])), _index);
             },
             getSelection () {
-                // 分别拿根数据和子数据的已选项
                 let selectionIndexes = [];
-                let selectionRowKeys = [];
                 for (let i in this.objData) {
-                    const objData = this.objData[i];
-                    if (objData._isChecked) selectionIndexes.push(parseInt(i));
-                    if (objData.children && objData.children.length) {
-                        selectionRowKeys = selectionRowKeys.concat(this.getSelectionChildrenRowKeys(objData, selectionRowKeys));
-                    }
+                    if (this.objData[i]._isChecked) selectionIndexes.push(parseInt(i));
                 }
-
-                // 去重的 RowKeys
-                selectionRowKeys = [...new Set(selectionRowKeys)];
-
-                let selection = [];
-
-                this.data.forEach((item, index) => {
-                    if (selectionIndexes.indexOf(index) > -1) {
-                        selection = selection.concat(item);
-                    }
-                    if (item.children && item.children.length && selectionRowKeys.length) {
-                        selection = selection.concat(this.getSelectionChildren(item, selection, selectionRowKeys));
-                    }
-                });
-
-
-                selection = [...new Set(selection)];
-                return JSON.parse(JSON.stringify(selection));
+                return JSON.parse(JSON.stringify(this.data.filter((data, index) => selectionIndexes.indexOf(index) > -1)));
             },
-            getSelectionChildrenRowKeys (objData, selectionRowKeys) {
-                if (objData.children && objData.children.length) {
-                    objData.children.forEach(item => {
-                        if (item._isChecked) selectionRowKeys.push(item._rowKey);
-                        if (item.children && item.children.length) {
-                            selectionRowKeys = selectionRowKeys.concat(this.getSelectionChildrenRowKeys(item, selectionRowKeys));
-                        }
-                    });
-                }
-                return selectionRowKeys;
-            },
-            getSelectionChildren (data, selection, selectionRowKeys) {
-                if (data.children && data.children.length) {
-                    data.children.forEach(item => {
-                        if (selectionRowKeys.indexOf(item[this.rowKey]) > -1) {
-                            selection = selection.concat(item);
-                        }
-                        if (item.children && item.children.length) {
-                            selection = selection.concat(this.getSelectionChildren(item, selection, selectionRowKeys));
-                        }
-                    });
-                }
-                return selection;
-            },
-            toggleSelect (_index, rowKey) {
+            toggleSelect (_index) {
                 let data = {};
 
-                if (rowKey) {
-                    data = this.getDataByRowKey(rowKey);
-                } else {
-                    for (let i in this.objData) {
-                        if (parseInt(i) === _index) {
-                            data = this.objData[i];
-                            break;
-                        }
+                for (let i in this.objData) {
+                    if (parseInt(i) === _index) {
+                        data = this.objData[i];
+                        break;
                     }
                 }
                 const status = !data._isChecked;
 
-                data._isChecked = status;
+                this.objData[_index]._isChecked = status;
+
                 const selection = this.getSelection();
-                const selectedData = rowKey ? this.getBaseDataByRowKey(rowKey, this.data) : this.data[_index];
-                this.$emit(status ? 'on-select' : 'on-select-cancel', selection, JSON.parse(JSON.stringify(selectedData)));
+                this.$emit(status ? 'on-select' : 'on-select-cancel', selection, JSON.parse(JSON.stringify(this.data[_index])));
                 this.$emit('on-selection-change', selection);
             },
             toggleExpand (_index) {
@@ -793,108 +578,10 @@
                 const status = !data._isExpanded;
                 this.objData[_index]._isExpanded = status;
                 this.$emit('on-expand', JSON.parse(JSON.stringify(this.cloneData[_index])), status);
-
+                
                 if(this.height || this.maxHeight){
                     this.$nextTick(()=>this.fixedBody());
                 }
-            },
-            toggleTree (rowKey) {
-                const data = this.getDataByRowKey(rowKey);
-                // async loading
-                if ('_loading' in data && data._loading) return;
-                if ('_loading' in data && !data._loading && data.children.length === 0) {
-                    const sourceData = this.getBaseDataByRowKey(rowKey, this.data);
-                    this.$set(sourceData, '_loading', true);
-                    this.loadData(sourceData, children => {
-                        this.$set(sourceData, '_loading', false);
-                        if (children.length) {
-                            this.$set(sourceData, 'children', children);
-                            this.$nextTick(() => {
-                                const newData = this.getDataByRowKey(rowKey);
-                                newData._isShowChildren = !newData._isShowChildren;
-                                this.updateDataStatus(rowKey, '_showChildren', newData._isShowChildren);
-                            });
-                        }
-                    });
-                    return;
-                }
-
-                data._isShowChildren = !data._isShowChildren;
-                this.updateDataStatus(rowKey, '_showChildren', data._isShowChildren);
-            },
-            /**
-             * @description 当修改某内置属性，如 _isShowChildren 时，因当将原 data 对应 _showChildren 也修改，否则修改 data 时，状态会重置
-             * @param rowKey rowKey
-             * @param key 原数据对应的字段
-             * @param value 修改的值
-             * */
-            // todo 单选、多选等状态可能也需要更新原数据
-            updateDataStatus (rowKey, key, value) {
-                const data = this.getBaseDataByRowKey(rowKey, this.data);
-                this.$set(data, key, value);
-            },
-            getDataByRowKey (rowKey, objData = this.objData) {
-                let data = null;
-                for (let i in objData) {
-                    const thisData = objData[i];
-                    if (thisData._rowKey === rowKey) {
-                        data = thisData;
-                        break;
-                    } else if (thisData.children && thisData.children.length) {
-                        data = this.getChildrenByRowKey(rowKey, thisData);
-                        if (data) {
-                            break;
-                        }
-                    }
-                }
-                return data;
-            },
-            getChildrenByRowKey (rowKey, objData) {
-                let data = null;
-                if (objData.children && objData.children.length) {
-                    for (let i = 0; i < objData.children.length; i++) {
-                        const item = objData.children[i];
-                        if (item._rowKey === rowKey) {
-                            data = item;
-                            break;
-                        } else if (item.children && item.children.length) {
-                            data = this.getChildrenByRowKey(rowKey, item);
-                            if (data) {
-                                break;
-                            }
-                        }
-                    }
-                }
-                return data;
-            },
-            getBaseDataByRowKey (rowKey, sourceData = this.cloneData) {
-                let data = null;
-                for (let i = 0; i < sourceData.length; i++) {
-                    const thisData = sourceData[i];
-                    if (thisData[this.rowKey] === rowKey) {
-                        data = thisData;
-                        break;
-                    } else if (thisData.children && thisData.children.length) {
-                        data = this.getChildrenDataByRowKey(rowKey, thisData);
-                        if (data && data[this.rowKey] === rowKey) return data;
-                    }
-                }
-                return data;
-            },
-            getChildrenDataByRowKey (rowKey, cloneData) {
-                let data = null;
-                if (cloneData.children && cloneData.children.length) {
-                    for (let i = 0; i < cloneData.children.length; i++) {
-                        const item = cloneData.children[i];
-                        if (item[this.rowKey] === rowKey) {
-                            data = item;
-                            break;
-                        } else if (item.children && item.children.length) {
-                            data = this.getChildrenDataByRowKey(rowKey, item);
-                        }
-                    }
-                }
-                return data;
             },
             selectAll (status) {
                 // this.rebuildData.forEach((data) => {
@@ -905,13 +592,11 @@
                 //     }
 
                 // });
-                for (const data of this.rebuildData) {
-                    const objData = this.objData[data._index];
-                    if (!objData._isDisabled) {
-                        objData._isChecked = status;
-                    }
-                    if (data.children && data.children.length) {
-                        this.selectAllChildren(objData, status);
+                for(const data of this.rebuildData){
+                    if(this.objData[data._index]._isDisabled){
+                        continue;
+                    }else{
+                        this.objData[data._index]._isChecked = status;
                     }
                 }
                 const selection = this.getSelection();
@@ -922,18 +607,7 @@
                 }
                 this.$emit('on-selection-change', selection);
             },
-            selectAllChildren (data, status) {
-                if (data.children && data.children.length) {
-                    data.children.map(item => {
-                        if (!item._isDisabled) {
-                            item._isChecked = status;
-                        }
-                        if (item.children && item.children.length) {
-                            this.selectAllChildren(item, status);
-                        }
-                    });
-                }
-            },
+            
             fixedHeader () {
                 if (this.height || this.maxHeight) {
                     this.$nextTick(() => {
@@ -970,7 +644,7 @@
 
                     this.showHorizontalScrollBar = bodyEl.offsetWidth < bodyContentEl.offsetWidth + (this.showVerticalScrollBar?this.scrollBarWidth:0);
                     this.showVerticalScrollBar = this.bodyHeight? bodyHeight - (this.showHorizontalScrollBar?this.scrollBarWidth:0) < bodyContentHeight : false;
-
+                    
                     if(this.showVerticalScrollBar){
                         bodyEl.classList.add(this.prefixCls +'-overflowY');
                     }else{
@@ -981,7 +655,7 @@
                     }else{
                         bodyEl.classList.remove(this.prefixCls +'-overflowX');
                     }
-                }
+                } 
             },
 
             hideColumnFilter () {
@@ -991,7 +665,6 @@
                 if (this.showHeader) this.$refs.header.scrollLeft = event.target.scrollLeft;
                 if (this.isLeftFixed) this.$refs.fixedBody.scrollTop = event.target.scrollTop;
                 if (this.isRightFixed) this.$refs.fixedRightBody.scrollTop = event.target.scrollTop;
-                if (this.showSummary) this.$refs.summary.$el.scrollLeft = event.target.scrollLeft;
                 this.hideColumnFilter();
             },
             handleFixedMousewheel(event) {
@@ -1052,11 +725,6 @@
                         }
                     }
                 });
-                for (let i = 0; i < data.length; i++) {
-                    if (data[i].children && data[i].children.length) {
-                        data[i].children = this.sortData(data[i].children, type, index);
-                    }
-                }
                 return data;
             },
             handleSort (_index, type) {
@@ -1150,27 +818,9 @@
                 let data = deepCopy(this.data);
                 data.forEach((row, index) => {
                     row._index = index;
-                    row._rowKey = (typeof this.rowKey) === 'string' ? row[this.rowKey] : rowKey++;
-                    if (row.children && row.children.length) {
-                        row.children = this.makeChildrenData(row);
-                    }
+                    row._rowKey = rowKey++;
                 });
                 return data;
-            },
-            makeChildrenData (data) {
-                if (data.children && data.children.length) {
-                    return data.children.map((row, index) => {
-                        const newRow = deepCopy(row);
-                        newRow._index = index;
-                        newRow._rowKey = (typeof this.rowKey) === 'string' ? newRow[this.rowKey] : rowKey++;
-                        if (newRow.children && newRow.children.length) {
-                            newRow.children = this.makeChildrenData(newRow);
-                        }
-                        return newRow;
-                    });
-                } else {
-                    return data;
-                }
             },
             makeDataWithSort () {
                 let data = this.makeData();
@@ -1199,70 +849,34 @@
                 this.cloneColumns.forEach(col => data = this.filterData(data, col));
                 return data;
             },
-            makeObjBaseData (row) {
-                const newRow = deepCopy(row);
-                if ((typeof this.rowKey) === 'string') {
-                    newRow._rowKey = newRow[this.rowKey];
-                }
-                newRow._isHover = false;
-                if (newRow._disabled) {
-                    newRow._isDisabled = newRow._disabled;
-                } else {
-                    newRow._isDisabled = false;
-                }
-                if (newRow._checked) {
-                    newRow._isChecked = newRow._checked;
-                } else {
-                    newRow._isChecked = false;
-                }
-                if (newRow._expanded) {
-                    newRow._isExpanded = newRow._expanded;
-                } else {
-                    newRow._isExpanded = false;
-                }
-                if (newRow._highlight) {
-                    newRow._isHighlight = newRow._highlight;
-                } else {
-                    newRow._isHighlight = false;
-                }
-                return newRow;
-            },
             makeObjData () {
                 let data = {};
                 this.data.forEach((row, index) => {
-                    const newRow = this.makeObjBaseData(row);
-                    if (newRow.children && newRow.children.length) {
-                        if (newRow._showChildren) {
-                            newRow._isShowChildren = newRow._showChildren;
-                        } else {
-                            newRow._isShowChildren = false;
-                        }
-                        newRow.children = this.makeChildrenObjData(newRow);
+                    const newRow = deepCopy(row);// todo 直接替换
+                    newRow._isHover = false;
+                    if (newRow._disabled) {
+                        newRow._isDisabled = newRow._disabled;
+                    } else {
+                        newRow._isDisabled = false;
                     }
-                    // else if ('_loading' in newRow && newRow.children && newRow.children.length === 0) {
-                    //     newRow._isShowChildren = false;
-                    // }
+                    if (newRow._checked) {
+                        newRow._isChecked = newRow._checked;
+                    } else {
+                        newRow._isChecked = false;
+                    }
+                    if (newRow._expanded) {
+                        newRow._isExpanded = newRow._expanded;
+                    } else {
+                        newRow._isExpanded = false;
+                    }
+                    if (newRow._highlight) {
+                        newRow._isHighlight = newRow._highlight;
+                    } else {
+                        newRow._isHighlight = false;
+                    }
                     data[index] = newRow;
                 });
                 return data;
-            },
-            makeChildrenObjData (data) {
-                if (data.children && data.children.length) {
-                    return data.children.map(row => {
-                        const newRow = this.makeObjBaseData(row);
-                        if (newRow._showChildren) {
-                            newRow._isShowChildren = newRow._showChildren;
-                        } else {
-                            newRow._isShowChildren = false;
-                        }
-                        if (newRow.children && newRow.children.length) {
-                            newRow.children = this.makeChildrenObjData(newRow);
-                        }
-                        return newRow;
-                    });
-                } else {
-                    return data;
-                }
             },
             // 修改列，设置一个隐藏的 id，便于后面的多级表头寻找对应的列，否则找不到
             makeColumnsId (columns) {
@@ -1364,9 +978,7 @@
 
             this.$on('on-visible-change', (val) => {
                 if (val) {
-                    this.$nextTick(() => {
-                        this.handleResize();
-                    });
+                    this.handleResize();
                 }
             });
         },
@@ -1417,6 +1029,26 @@
             },
             showVerticalScrollBar () {
                 this.handleResize();
+            },
+            loading(val){
+                if(this.minTimeout===false){
+                    this.showLoading = val
+                    return
+                }
+                if(val){
+                    this.loadingTime.start = new Date().getTime()
+                    this.showLoading = true
+                }else{
+                    this.loadingTime.end = new Date().getTime()
+                    let passTime = this.loadingTime.end - this.loadingTime.start
+                    if( passTime > this.minTimeout){
+                        this.showLoading = false
+                    }else{
+                        setTimeout(()=>{
+                            this.showLoading = false
+                        },this.minTimeout - passTime)
+                    }
+                }
             }
         }
     };
